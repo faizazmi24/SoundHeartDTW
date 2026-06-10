@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DTW Heartbeat Analysis — ITS Surabaya</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0b0e13;
+    --surface:  #111520;
+    --card:     #161c2a;
+    --border:   rgba(255,255,255,0.07);
+    --accent:   #e74c3c;
+    --green:    #27ae60;
+    --purple:   #8e44ad;
+    --amber:    #f39c12;
+    --blue:     #2980b9;
+    --gray:     #7f8c8d;
+    --text:     #e8eaf0;
+    --muted:    #6b7280;
+    --mono:     'IBM Plex Mono', monospace;
+    --sans:     'Inter', sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(11,14,19,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px;
+  }
+  .nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--mono); font-size: 13px; color: var(--text);
+    text-decoration: none;
+  }
+  .nav-brand span { color: var(--accent); }
+  .nav-links { display: flex; gap: 24px; }
+  .nav-links a {
+    font-size: 12px; color: var(--muted); text-decoration: none;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    transition: color .2s;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-badge {
+    font-family: var(--mono); font-size: 11px;
+    background: rgba(231,76,60,0.12); color: var(--accent);
+    border: 1px solid rgba(231,76,60,0.25);
+    padding: 2px 8px; border-radius: 3px;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    padding: 80px 2rem 60px;
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;
+  }
+  .hero-eyebrow {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--accent); letter-spacing: 0.12em;
+    text-transform: uppercase; margin-bottom: 16px;
+  }
+  .hero h1 {
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 600; line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero-sub {
+    margin-top: 16px; font-size: 14px;
+    color: var(--muted); max-width: 420px; line-height: 1.7;
+  }
+  .hero-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
+  .tag {
+    font-family: var(--mono); font-size: 11px;
+    padding: 4px 10px; border-radius: 3px;
+    border: 1px solid var(--border); color: var(--muted);
+  }
+  .tag.accent { border-color: rgba(231,76,60,0.3); color: var(--accent); background: rgba(231,76,60,0.06); }
+
+  /* ECG animation */
+  .ecg-wrap {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; overflow: hidden;
+  }
+  .ecg-label { font-family: var(--mono); font-size: 10px; color: var(--accent); margin-bottom: 8px; }
+  #ecg-canvas { width: 100%; height: 90px; display: block; }
+
+  /* ── SECTION ── */
+  section { max-width: 1100px; margin: 0 auto; padding: 48px 2rem; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 28px; }
+  .sec-num { font-family: var(--mono); font-size: 11px; color: var(--accent); }
+  .sec-title { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  hr.divider { border: none; border-top: 1px solid var(--border); margin: 0 2rem; }
+
+  /* ── STAT GRID ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px 18px;
+  }
+  .stat-card .label { font-size: 11px; color: var(--muted); letter-spacing: 0.04em; text-transform: uppercase; margin-bottom: 8px; }
+  .stat-card .value { font-family: var(--mono); font-size: 28px; font-weight: 500; color: var(--text); line-height: 1; }
+  .stat-card .sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+  .stat-card.hi .value { color: var(--accent); }
+
+  /* ── CLASS CARDS ── */
+  .class-grid { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; }
+  .class-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 14px;
+    cursor: pointer; transition: border-color .2s, background .2s;
+    position: relative; overflow: hidden;
+  }
+  .class-card::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: var(--cls-color, #555);
+  }
+  .class-card:hover { background: #1a2035; }
+  .class-card.active { border-color: var(--cls-color); }
+  .class-card .cls-name { font-family: var(--mono); font-size: 12px; font-weight: 500; }
+  .class-card .cls-count { font-size: 20px; font-weight: 600; margin: 6px 0 2px; color: var(--cls-color, var(--text)); }
+  .class-card .cls-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  /* ── WAVEFORM PANEL ── */
+  .wave-panel {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px; margin-top: 16px;
+  }
+  .wave-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .wave-title { font-family: var(--mono); font-size: 12px; color: var(--text); }
+  .wave-badge { font-family: var(--mono); font-size: 10px; padding: 3px 8px; border-radius: 3px; }
+  #wave-display { width: 100%; height: 100px; display: block; }
+
+  /* ── CHARTS ── */
+  .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px;
+  }
+  .chart-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 16px; }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* ── DTW EXPLAINER ── */
+  .dtw-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .dtw-step {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 20px;
+  }
+  .dtw-step-num { font-family: var(--mono); font-size: 10px; color: var(--accent); margin-bottom: 8px; }
+  .dtw-step-title { font-size: 13px; font-weight: 500; margin-bottom: 8px; }
+  .dtw-step-desc { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── HEATMAP ── */
+  .heatmap-wrap {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 24px;
+  }
+  #heatmap-svg { width: 100%; }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 28px 2rem;
+    display: flex; justify-content: space-between; align-items: center;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .footer-left { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .footer-left a { color: var(--accent); text-decoration: none; }
+  .footer-right { font-size: 11px; color: var(--muted); }
+
+  @media (max-width: 768px) {
+    .hero { grid-template-columns: 1fr; gap: 32px; }
+    .stat-grid { grid-template-columns: repeat(2,1fr); }
+    .class-grid { grid-template-columns: repeat(2,1fr); }
+    .chart-grid { grid-template-columns: 1fr; }
+    .dtw-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-brand" href="#">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+      <rect x="1" y="8" width="3" height="2" fill="#e74c3c" rx="1"/>
+      <path d="M4 9 L5 4 L6.5 13 L8 6 L9.5 11 L11 7 L12 9 L14 9" stroke="#e74c3c" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="14" y="8" width="3" height="2" fill="#e74c3c" rx="1"/>
+    </svg>
+    DTW<span>·</span>Heartbeat
+  </a>
+  <div class="nav-links">
+    <a href="#dataset">Dataset</a>
+    <a href="#kelas">Kelas</a>
+    <a href="#dtw">Analisis DTW</a>
+    <a href="#hasil">Hasil</a>
+  </div>
+  <span class="nav-badge">ITS Surabaya</span>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div>
+    <p class="hero-eyebrow">Tugas Analisis Sinyal Audio</p>
+    <h1>Dynamic Time<br>Warping pada<br>Suara <em>Detak Jantung</em></h1>
+    <p class="hero-sub">Mengukur kemiripan sinyal audio rekaman stetoskop dari lima kondisi jantung menggunakan algoritma DTW — metode yang toleran terhadap perbedaan kecepatan dan fase antar rekaman.</p>
+    <div class="hero-tags">
+      <span class="tag accent">DTW</span>
+      <span class="tag">Heartbeat Sounds</span>
+      <span class="tag">Kaggle</span>
+      <span class="tag">librosa</span>
+      <span class="tag">fastdtw</span>
+    </div>
+  </div>
+  <div class="ecg-wrap">
+    <div class="ecg-label">▶ SINYAL LIVE — simulasi</div>
+    <canvas id="ecg-canvas"></canvas>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- DATASET STATS -->
+<section id="dataset">
+  <div class="sec-head">
+    <span class="sec-num">01</span>
+    <h2 class="sec-title">Ringkasan Dataset</h2>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card hi">
+      <div class="label">Total file audio</div>
+      <div class="value">585</div>
+      <div class="sub">file WAV berlabel</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Jumlah kelas</div>
+      <div class="value">5</div>
+      <div class="sub">kondisi jantung</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Sub-dataset</div>
+      <div class="value">2</div>
+      <div class="sub">Set A + Set B</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Sample rate</div>
+      <div class="value">2k</div>
+      <div class="sub">Hz (downsampled)</div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- KELAS -->
+<section id="kelas">
+  <div class="sec-head">
+    <span class="sec-num">02</span>
+    <h2 class="sec-title">Kelas Detak Jantung</h2>
+  </div>
+
+  <div class="class-grid">
+    <div class="class-card active" style="--cls-color:#27ae60" onclick="selectClass(this,'normal')">
+      <div class="cls-name" style="color:#27ae60">normal</div>
+      <div class="cls-count">320</div>
+      <div class="cls-desc">Detak sehat, pola S1–S2 teratur</div>
+    </div>
+    <div class="class-card" style="--cls-color:#e74c3c" onclick="selectClass(this,'murmur')">
+      <div class="cls-name" style="color:#e74c3c">murmur</div>
+      <div class="cls-count">95</div>
+      <div class="cls-desc">Bising akibat turbulensi aliran darah</div>
+    </div>
+    <div class="class-card" style="--cls-color:#f39c12" onclick="selectClass(this,'extrahls')">
+      <div class="cls-name" style="color:#f39c12">extrahls</div>
+      <div class="cls-count">45</div>
+      <div class="cls-desc">Suara jantung tambahan S3/S4</div>
+    </div>
+    <div class="class-card" style="--cls-color:#8e44ad" onclick="selectClass(this,'extrastole')">
+      <div class="cls-name" style="color:#8e44ad">extrastole</div>
+      <div class="cls-count">46</div>
+      <div class="cls-desc">Detak prematur, ritme tidak teratur</div>
+    </div>
+    <div class="class-card" style="--cls-color:#7f8c8d" onclick="selectClass(this,'artifact')">
+      <div class="cls-name" style="color:#7f8c8d">artifact</div>
+      <div class="cls-count">79</div>
+      <div class="cls-desc">Noise atau gangguan perekaman</div>
+    </div>
+  </div>
+
+  <div class="wave-panel">
+    <div class="wave-header">
+      <span class="wave-title" id="wave-title">normal — detak jantung sehat</span>
+      <span class="wave-badge" id="wave-badge" style="background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.25)">S1 · S2</span>
+    </div>
+    <canvas id="wave-display"></canvas>
+    <p id="wave-desc" style="font-size:12px;color:var(--muted);margin-top:12px;line-height:1.6">
+      Dua komponen suara utama: S1 ("lub") akibat penutupan katup mitral–trikuspid dan S2 ("dub") akibat penutupan katup aorta–pulmonal. Pola berulang stabil — jarak DTW intra-kelas paling kecil di antara semua kelas.
+    </p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- DTW EXPLAINER -->
+<section id="dtw">
+  <div class="sec-head">
+    <span class="sec-num">03</span>
+    <h2 class="sec-title">Cara Kerja DTW</h2>
+  </div>
+  <div class="dtw-grid">
+    <div class="dtw-step">
+      <div class="dtw-step-num">LANGKAH 01</div>
+      <div class="dtw-step-title">Bangun matriks cost</div>
+      <div class="dtw-step-desc">Hitung jarak absolut |x<sub>i</sub> − y<sub>j</sub>| untuk setiap pasang titik dari dua sinyal. Hasilnya adalah matriks n×m.</div>
+    </div>
+    <div class="dtw-step">
+      <div class="dtw-step-num">LANGKAH 02</div>
+      <div class="dtw-step-title">Isi accumulated cost</div>
+      <div class="dtw-step-desc">Gunakan dynamic programming untuk mengisi matriks secara kumulatif. Setiap sel mengambil nilai minimum dari tiga tetangganya (atas, kiri, diagonal).</div>
+    </div>
+    <div class="dtw-step">
+      <div class="dtw-step-num">LANGKAH 03</div>
+      <div class="dtw-step-title">Traceback warping path</div>
+      <div class="dtw-step-desc">Lacak jalur optimal dari pojok kanan-bawah ke kiri-atas. Panjang path ini mencerminkan "seberapa banyak peregangan" dibutuhkan untuk menyelaraskan kedua sinyal.</div>
+    </div>
+  </div>
+
+  <div style="margin-top:16px">
+    <div class="chart-card">
+      <div class="chart-label">Simulasi matriks cost DTW — normal vs murmur</div>
+      <div id="heatmap-wrap">
+        <svg id="heatmap-svg" viewBox="0 0 640 220" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- HASIL -->
+<section id="hasil">
+  <div class="sec-head">
+    <span class="sec-num">04</span>
+    <h2 class="sec-title">Hasil Analisis</h2>
+  </div>
+
+  <div class="chart-grid">
+    <div class="chart-card">
+      <div class="chart-label">Distribusi kelas dataset</div>
+      <div class="chart-wrap">
+        <canvas id="chartDist" role="img" aria-label="Bar chart distribusi jumlah file per kelas detak jantung"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-label">Rata-rata jarak DTW antar kelas</div>
+      <div class="chart-wrap">
+        <canvas id="chartDTW" role="img" aria-label="Bar chart rata-rata jarak DTW dari kelas normal ke kelas lain"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="chart-grid" style="margin-top:16px">
+    <div class="chart-card">
+      <div class="chart-label">Jarak intra-class vs inter-class (simulasi)</div>
+      <div class="chart-wrap">
+        <canvas id="chartIntra" role="img" aria-label="Bar chart perbandingan jarak intra dan inter class"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-label">Akurasi 1-NN DTW per kelas (simulasi)</div>
+      <div class="chart-wrap">
+        <canvas id="chartAcc" role="img" aria-label="Bar chart akurasi klasifikasi 1-NN DTW per kelas"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    Dataset: <a href="https://www.kaggle.com/datasets/kinguistics/heartbeat-sounds" target="_blank">kaggle.com/datasets/kinguistics/heartbeat-sounds</a>
+    &nbsp;·&nbsp; Metode: Dynamic Time Warping (DTW)
+  </div>
+  <div class="footer-right">Institut Teknologi Sepuluh Nopember — Surabaya</div>
+</footer>
+
+<script>
+/* ── ECG LIVE ANIMATION ── */
+(function(){
+  const c = document.getElementById('ecg-canvas');
+  const ctx = c.getContext('2d');
+  let W, H, offset = 0;
+
+  function resize(){
+    W = c.offsetWidth; H = c.offsetHeight;
+    c.width = W; c.height = H;
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  function ecgY(x){
+    const p = ((x + offset) % 200) / 200;
+    if(p < 0.04) return H/2;
+    if(p < 0.07) return H/2 - H*0.08;
+    if(p < 0.10) return H/2;
+    if(p < 0.12) return H/2 - H*0.55;
+    if(p < 0.15) return H/2 + H*0.20;
+    if(p < 0.19) return H/2 - H*0.10;
+    if(p < 0.22) return H/2;
+    if(p < 0.32) return H/2 - H*0.06;
+    if(p < 0.35) return H/2 - H*0.03;
+    if(p < 0.38) return H/2;
+    return H/2;
+  }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    ctx.strokeStyle = '#e74c3c';
+    ctx.lineWidth = 1.5;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = 'rgba(231,76,60,0.5)';
+    ctx.beginPath();
+    for(let x=0;x<W;x++){
+      const y = ecgY(x);
+      x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    offset += 1.8;
+    requestAnimationFrame(draw);
+  }
+  draw();
+})();
+
+/* ── WAVEFORM RENDERER ── */
+const WAVE_DATA = {
+  normal: {
+    title: 'normal — detak jantung sehat',
+    badge: 'S1 · S2',
+    badgeStyle: 'background:rgba(39,174,96,.12);color:#27ae60;border:1px solid rgba(39,174,96,.25)',
+    color: '#27ae60',
+    desc: 'Dua komponen suara utama: S1 ("lub") akibat penutupan katup mitral–trikuspid dan S2 ("dub") akibat penutupan katup aorta–pulmonal. Pola berulang stabil — jarak DTW intra-kelas paling kecil.',
+    fn: (x) => {
+      const p = x % 170;
+      if(p>20&&p<40) return Math.sin((p-20)/20*Math.PI)*0.9;
+      if(p>65&&p<80) return Math.sin((p-65)/15*Math.PI)*0.5;
+      return 0;
+    }
+  },
+  murmur: {
+    title: 'murmur — bising jantung',
+    badge: 'S1 · noise · S2',
+    badgeStyle: 'background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.25)',
+    color: '#e74c3c',
+    desc: 'Osilasi frekuensi tinggi mengisi celah antara S1 dan S2 akibat turbulensi aliran darah melalui katup menyempit. DTW harus meregangkan warping path untuk mencocokkan noise ini ke sinyal normal.',
+    fn: (x) => {
+      const p = x % 180;
+      if(p>15&&p<35) return Math.sin((p-15)/20*Math.PI)*0.9;
+      if(p>40&&p<120) return Math.sin((p-40)*0.6)*0.18*(1-(p-40)/80*0.4);
+      if(p>130&&p<148) return Math.sin((p-130)/18*Math.PI)*0.45;
+      return 0;
+    }
+  },
+  extrahls: {
+    title: 'extra heart sound — S3/S4 tambahan',
+    badge: 'S1 · S2 · S3',
+    badgeStyle: 'background:rgba(243,156,18,.12);color:#f39c12;border:1px solid rgba(243,156,18,.25)',
+    color: '#f39c12',
+    desc: 'Puncak ketiga (S3 atau S4) muncul di luar pasangan S1–S2. DTW mendeteksi puncak ekstra yang tidak bisa dipetakan secara natural ke sinyal dua-puncak, menaikkan accumulated cost.',
+    fn: (x) => {
+      const p = x % 160;
+      if(p>10&&p<30) return Math.sin((p-10)/20*Math.PI)*0.9;
+      if(p>55&&p<70) return Math.sin((p-55)/15*Math.PI)*0.5;
+      if(p>85&&p<100) return Math.sin((p-85)/15*Math.PI)*0.3;
+      return 0;
+    }
+  },
+  extrastole: {
+    title: 'extrasystole — detak prematur',
+    badge: 'detak + jeda',
+    badgeStyle: 'background:rgba(142,68,173,.12);color:#8e44ad;border:1px solid rgba(142,68,173,.25)',
+    color: '#8e44ad',
+    desc: 'Kontraksi prematur dari impuls ektopik, diikuti jeda kompensatorik sebelum detak normal berikutnya. Timing yang tidak konsisten inilah yang membuat jarak DTW-nya besar antar rekaman.',
+    fn: (x) => {
+      const p = x % 200;
+      if(p>10&&p<28) return Math.sin((p-10)/18*Math.PI)*0.9;
+      if(p>55&&p<70) return Math.sin((p-55)/15*Math.PI)*0.38;
+      if(p>80&&p<93) return Math.sin((p-80)/13*Math.PI)*0.42;
+      if(p>155&&p<170) return Math.sin((p-155)/15*Math.PI)*0.9;
+      return 0;
+    }
+  },
+  artifact: {
+    title: 'artifact — gangguan rekaman',
+    badge: 'noise',
+    badgeStyle: 'background:rgba(127,140,141,.12);color:#95a5a6;border:1px solid rgba(127,140,141,.25)',
+    color: '#7f8c8d',
+    desc: 'Tidak ada pola temporal yang bermakna — sinyal sepenuhnya acak dari gesekan stetoskop atau gerakan pasien. DTW memberikan jarak terbesar ke semua kelas karena tidak ada struktur yang bisa di-align.',
+    fn: (x) => {
+      const s = Math.sin(x*0.31)*Math.cos(x*0.17)+Math.sin(x*0.73)*0.4+Math.sin(x*1.3)*0.2;
+      return s * 0.35;
+    }
+  }
+};
+
+let currentClass = 'normal';
+function drawWave(key){
+  const c = document.getElementById('wave-display');
+  const ctx = c.getContext('2d');
+  c.width = c.offsetWidth; c.height = 100;
+  const W = c.width, H = c.height, mid = H/2;
+  const d = WAVE_DATA[key];
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = d.color;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  for(let x=0;x<W;x++){
+    const t = x * 400/W;
+    const y = mid - d.fn(t) * mid * 0.88;
+    x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+}
+
+function selectClass(el, key){
+  document.querySelectorAll('.class-card').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  currentClass = key;
+  const d = WAVE_DATA[key];
+  document.getElementById('wave-title').textContent = d.title;
+  document.getElementById('wave-badge').textContent = d.badge;
+  document.getElementById('wave-badge').style.cssText = d.badgeStyle;
+  document.getElementById('wave-desc').textContent = d.desc;
+  drawWave(key);
+}
+
+window.addEventListener('load', () => { drawWave('normal'); buildHeatmap(); buildCharts(); });
+window.addEventListener('resize', () => { drawWave(currentClass); buildHeatmap(); });
+
+/* ── DTW HEATMAP SVG ── */
+function buildHeatmap(){
+  const svg = document.getElementById('heatmap-svg');
+  svg.innerHTML = '';
+  const cols = 28, rows = 20;
+  const cw = 18, ch = 8;
+  const ox = 50, oy = 10;
+
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const v = Math.pow((r/rows*0.7 + c/cols*0.3) + Math.sin(r*0.4)*0.1 + Math.sin(c*0.3)*0.08, 1.2);
+      const alpha = 0.08 + v * 0.7;
+      const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+      rect.setAttribute('x', ox + c*cw); rect.setAttribute('y', oy + r*ch);
+      rect.setAttribute('width', cw-1); rect.setAttribute('height', ch-1);
+      rect.setAttribute('fill', `rgba(231,76,60,${alpha.toFixed(2)})`);
+      svg.appendChild(rect);
+    }
+  }
+  // warping path (diagonal-ish)
+  const pts = [];
+  let r=rows-1, c=0;
+  while(r>0||c<cols-1){
+    pts.push([ox+c*cw+cw/2, oy+r*ch+ch/2]);
+    if(r>0&&c<cols-1){ const rb=Math.random(); if(rb<0.5){r--;c++;}else if(rb<0.75){c++;}else{r--;} }
+    else if(r>0) r--;
+    else c++;
+  }
+  pts.push([ox+(cols-1)*cw+cw/2, oy]);
+  const d = pts.map((p,i)=>(i===0?'M':'L')+p[0]+','+p[1]).join(' ');
+  const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+  path.setAttribute('d', d); path.setAttribute('fill','none');
+  path.setAttribute('stroke','#3b82f6'); path.setAttribute('stroke-width','2');
+  path.setAttribute('stroke-linecap','round'); path.setAttribute('stroke-linejoin','round');
+  svg.appendChild(path);
+
+  const lbl1 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  lbl1.setAttribute('x', ox+cols*cw/2); lbl1.setAttribute('y', oy+rows*ch+16);
+  lbl1.setAttribute('text-anchor','middle'); lbl1.setAttribute('font-size','10');
+  lbl1.setAttribute('fill','#6b7280'); lbl1.setAttribute('font-family','IBM Plex Mono,monospace');
+  lbl1.textContent='sinyal normal (indeks)'; svg.appendChild(lbl1);
+
+  const lbl2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+  lbl2.setAttribute('x', 14); lbl2.setAttribute('y', oy+rows*ch/2);
+  lbl2.setAttribute('text-anchor','middle'); lbl2.setAttribute('font-size','10');
+  lbl2.setAttribute('fill','#6b7280'); lbl2.setAttribute('font-family','IBM Plex Mono,monospace');
+  lbl2.setAttribute('transform',`rotate(-90,14,${oy+rows*ch/2})`);
+  lbl2.textContent='sinyal murmur (indeks)'; svg.appendChild(lbl2);
+
+  const leg = document.createElementNS('http://www.w3.org/2000/svg','text');
+  leg.setAttribute('x', ox+cols*cw-2); leg.setAttribute('y', oy+14);
+  leg.setAttribute('text-anchor','end'); leg.setAttribute('font-size','10');
+  leg.setAttribute('fill','#3b82f6'); leg.setAttribute('font-family','IBM Plex Mono,monospace');
+  leg.textContent='— warping path'; svg.appendChild(leg);
+}
+
+/* ── CHARTS ── */
+function buildCharts(){
+  const COLORS = ['#27ae60','#e74c3c','#f39c12','#8e44ad','#7f8c8d'];
+  const LABELS = ['normal','murmur','extrahls','extrastole','artifact'];
+  const tickColor = '#6b7280';
+  const gridColor = 'rgba(255,255,255,0.05)';
+
+  const baseOpts = {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: tickColor, font:{size:11} }, grid: { color: gridColor } },
+      y: { ticks: { color: tickColor, font:{size:11} }, grid: { color: gridColor } }
+    }
+  };
+
+  // Distribution
+  new Chart(document.getElementById('chartDist'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{ label: 'Jumlah file', data: [320,95,45,46,79],
+        backgroundColor: COLORS.map(c=>c+'44'), borderColor: COLORS, borderWidth: 1.5, borderRadius: 3 }]
+    },
+    options: { ...JSON.parse(JSON.stringify(baseOpts)) }
+  });
+
+  // DTW distances
+  new Chart(document.getElementById('chartDTW'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{ label: 'Jarak DTW rata-rata', data: [0, 1240, 980, 1580, 2340],
+        backgroundColor: COLORS.map(c=>c+'44'), borderColor: COLORS, borderWidth: 1.5, borderRadius: 3 }]
+    },
+    options: { ...JSON.parse(JSON.stringify(baseOpts)) }
+  });
+
+  // Intra vs inter
+  new Chart(document.getElementById('chartIntra'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [
+        { label: 'Intra-class', data: [420, 610, 550, 790, 1100],
+          backgroundColor: 'rgba(39,174,96,0.3)', borderColor: '#27ae60', borderWidth: 1.5, borderRadius: 3 },
+        { label: 'Inter-class', data: [1240, 1150, 1020, 1580, 2340],
+          backgroundColor: 'rgba(231,76,60,0.3)', borderColor: '#e74c3c', borderWidth: 1.5, borderRadius: 3 }
+      ]
+    },
+    options: {
+      ...JSON.parse(JSON.stringify(baseOpts)),
+      plugins: {
+        legend: {
+          display: true,
+          labels: { color: tickColor, font:{size:11}, boxWidth: 10, padding: 14 }
+        }
+      }
+    }
+  });
+
+  // Accuracy
+  new Chart(document.getElementById('chartAcc'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [{ label: 'Akurasi (%)', data: [88, 72, 65, 61, 94],
+        backgroundColor: COLORS.map(c=>c+'44'), borderColor: COLORS, borderWidth: 1.5, borderRadius: 3 }]
+    },
+    options: {
+      ...JSON.parse(JSON.stringify(baseOpts)),
+      scales: {
+        x: { ticks: { color: tickColor, font:{size:11} }, grid: { color: gridColor } },
+        y: { min: 0, max: 100, ticks: { color: tickColor, font:{size:11}, callback: v=>v+'%' }, grid: { color: gridColor } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>
